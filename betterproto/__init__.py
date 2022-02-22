@@ -1122,7 +1122,6 @@ class ServiceStub(ABC):
         ) as stream:
             await stream.send_message(request, end=True)
             response = await stream.recv_message()
-            assert response is not None
             return response
 
     async def _unary_stream(
