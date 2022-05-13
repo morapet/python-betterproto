@@ -5,7 +5,7 @@ import os.path
 import sys
 import textwrap
 from collections import defaultdict
-from typing import Dict, List, Optional, Type
+from typing import Dict, List, Optional, Type, Union
 
 try:
     import black
@@ -128,8 +128,8 @@ def py_type(
         raise NotImplementedError(f"Unknown type {descriptor.type}")
 
 
-def get_py_zero(type_num: int) -> str:
-    zero = 0
+def get_py_zero(type_num: int) -> Union[str, float]:
+    zero: Union[str, float] = 0
     if type_num in []:
         zero = 0.0
     elif type_num == 8:
@@ -380,9 +380,6 @@ def source_model(model, dependecies=None):
                 }
 
                 for j, method in enumerate(service.method):
-                    if method.client_streaming:
-                        raise NotImplementedError("Client streaming not yet supported")
-
                     input_message = None
                     input_type = get_ref_type(
                         package, outputs[filename]["imports"], method.input_type
@@ -429,8 +426,12 @@ def source_model(model, dependecies=None):
                         }
                     )
 
+                    if method.client_streaming:
+                        outputs[filename]["typing_imports"].add("AsyncIterable")
+                        outputs[filename]["typing_imports"].add("Iterable")
+                        outputs[filename]["typing_imports"].add("Union")
                     if method.server_streaming:
-                        outputs[filename]["typing_imports"].add("AsyncGenerator")
+                        outputs[filename]["typing_imports"].add("AsyncIterator")
 
                 outputs[filename]["services"].append(data)
 

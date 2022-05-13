@@ -1,3 +1,4 @@
+import asyncio
 import dataclasses
 import enum
 import inspect
@@ -10,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 from typing import (
     Any,
     AsyncGenerator,
+    AsyncIterable,
+    AsyncIterator,
     Callable,
     Collection,
     Dict,
@@ -432,7 +435,7 @@ def parse_fields(value: bytes) -> Generator[ParsedField, None, None]:
 
 # Bound type variable to allow methods to return `self` of subclasses
 T = TypeVar("T", bound="Message")
-
+ST = TypeVar("ST", bound="IProtoMessage")
 
 class ProtoClassMetadata:
     cls: Type["Message"]
@@ -1070,7 +1073,7 @@ def _get_wrapper(proto_type: str) -> Type:
 
 _Value = Union[str, bytes]
 _MetadataLike = Union[Mapping[str, _Value], Collection[Tuple[str, _Value]]]
-
+_MessageSource = Union[Iterable["IProtoMessage"], AsyncIterable["IProtoMessage"]]
 
 class ServiceStub(ABC):
     """
@@ -1133,7 +1136,7 @@ class ServiceStub(ABC):
         timeout: Optional[float] = None,
         deadline: Optional["Deadline"] = None,
         metadata: Optional[_MetadataLike] = None,
-    ) -> AsyncGenerator[T, None]:
+    ) -> AsyncIterator[T]:
         """Make a unary request and return the stream response iterator."""
         async with self.channel.request(
             route,
@@ -1145,3 +1148,69 @@ class ServiceStub(ABC):
             await stream.send_message(request, end=True)
             async for message in stream:
                 yield message
+
+    async def _stream_unary(
+            self,
+            route: str,
+            request_iterator: _MessageSource,
+            request_type: Type[ST],
+            response_type: Type[T],
+            *,
+            timeout: Optional[float] = None,
+            deadline: Optional["Deadline"] = None,
+            metadata: Optional[_MetadataLike] = None,
+    ) -> T:
+        """Make a stream request and return the response."""
+        async with self.channel.request(
+                route,
+                grpclib.const.Cardinality.STREAM_UNARY,
+                request_type,
+                response_type,
+                **self.__resolve_request_kwargs(timeout, deadline, metadata),
+        ) as stream:
+            await self._send_messages(stream, request_iterator)
+            response = await stream.recv_message()
+            return response
+
+    async def _stream_stream(
+       self,
+        route: str,
+        request_iterator: _MessageSource,
+        request_type: Type[ST],
+        response_type: Type[T],
+        *,
+        timeout: Optional[float] = None,
+        deadline: Optional["Deadline"] = None,
+        metadata: Optional[_MetadataLike] = None,
+    ) -> AsyncIterator[T]:
+        """
+        Make a stream request and return an AsyncIterator to iterate over response
+        messages.
+        """
+        async with self.channel.request(
+            route,
+            grpclib.const.Cardinality.STREAM_STREAM,
+            request_type,
+            response_type,
+            **self.__resolve_request_kwargs(timeout, deadline, metadata),
+        ) as stream:
+            await stream.send_request()
+            sending_task = asyncio.ensure_future(
+                self._send_messages(stream, request_iterator)
+            )
+            try:
+                async for response in stream:
+                    yield response
+            except:
+                sending_task.cancel()
+                raise
+
+    @staticmethod
+    async def _send_messages(stream, messages: _MessageSource):
+        if isinstance(messages, AsyncIterable):
+            async for message in messages:
+                await stream.send_message(message)
+        else:
+            for message in messages:
+                await stream.send_message(message)
+        await stream.end()
