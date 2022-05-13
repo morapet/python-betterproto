@@ -437,6 +437,7 @@ def parse_fields(value: bytes) -> Generator[ParsedField, None, None]:
 T = TypeVar("T", bound="Message")
 ST = TypeVar("ST", bound="IProtoMessage")
 
+
 class ProtoClassMetadata:
     cls: Type["Message"]
 
@@ -1075,6 +1076,7 @@ _Value = Union[str, bytes]
 _MetadataLike = Union[Mapping[str, _Value], Collection[Tuple[str, _Value]]]
 _MessageSource = Union[Iterable["IProtoMessage"], AsyncIterable["IProtoMessage"]]
 
+
 class ServiceStub(ABC):
     """
     Base class for async gRPC service stubs.
@@ -1150,30 +1152,30 @@ class ServiceStub(ABC):
                 yield message
 
     async def _stream_unary(
-            self,
-            route: str,
-            request_iterator: _MessageSource,
-            request_type: Type[ST],
-            response_type: Type[T],
-            *,
-            timeout: Optional[float] = None,
-            deadline: Optional["Deadline"] = None,
-            metadata: Optional[_MetadataLike] = None,
+        self,
+        route: str,
+        request_iterator: _MessageSource,
+        request_type: Type[ST],
+        response_type: Type[T],
+        *,
+        timeout: Optional[float] = None,
+        deadline: Optional["Deadline"] = None,
+        metadata: Optional[_MetadataLike] = None,
     ) -> T:
         """Make a stream request and return the response."""
         async with self.channel.request(
-                route,
-                grpclib.const.Cardinality.STREAM_UNARY,
-                request_type,
-                response_type,
-                **self.__resolve_request_kwargs(timeout, deadline, metadata),
+            route,
+            grpclib.const.Cardinality.STREAM_UNARY,
+            request_type,
+            response_type,
+            **self.__resolve_request_kwargs(timeout, deadline, metadata),
         ) as stream:
             await self._send_messages(stream, request_iterator)
             response = await stream.recv_message()
             return response
 
     async def _stream_stream(
-       self,
+        self,
         route: str,
         request_iterator: _MessageSource,
         request_type: Type[ST],
