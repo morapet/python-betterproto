@@ -16,7 +16,7 @@ setup(
     packages=find_packages(
         exclude=["tests", "*.tests", "*.tests.*", "output", "output.*"]
     ),
-    package_data={"betterproto": ["py.typed", "templates/template.py.j2"]},
+    package_data={"betterproto": ["py.typed", "templates/template.py.j2", "util/async_channel.py"]},
     python_requires=">=3.6",
     install_requires=[
         'dataclasses; python_version<"3.7"',
