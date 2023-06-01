@@ -2,13 +2,18 @@
 
 import itertools
 import os.path
+import re
 import sys
 import textwrap
 from collections import defaultdict
 from typing import Dict, List, Optional, Type, Union
+import logging
+
+logging.basicConfig(filename="generate.log", filemode='a', format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s', datefmt='%H:%M:%S', level=logging.DEBUG)
 
 try:
     import black
+    logging.getLogger("blib2to3").setLevel(logging.ERROR)
 except ImportError:
     print(
         "Unable to import `black` formatter. Did you install the compiler feature with `pip install betterproto[compiler]`?"
@@ -57,6 +62,7 @@ def get_ref_type(
     necessary. Unwraps well known type if required.
     """
 
+    logging.debug("input " + package +" type " + type_name)
     #    print("get reference type package: " + package + " type: " + type_name + " " + str(unwrap), file=sys.stderr)
 
     # If the package name is a blank string, then this should still work
@@ -104,6 +110,8 @@ def get_ref_type(
         parts[-1] = stringcase.pascalcase(parts[-1])
         type_name = f"{parts[-1]}"  # type without namespace should by imported by user in proto file
 
+    logging.debug("output " + package +" type " + type_name)
+
     return type_name
 
 
@@ -113,6 +121,8 @@ def py_type(
     message: DescriptorProto,
     descriptor: FieldDescriptorProto,
 ) -> str:
+    logging.debug("get py type='" + str(descriptor.type) + "' package= " + package)
+
     if descriptor.type in [1, 2, 6, 7, 15, 16]:
         return "float"
     elif descriptor.type in [3, 4, 5, 13, 17, 18]:
@@ -122,8 +132,6 @@ def py_type(
     elif descriptor.type == 9:
         return "str"
     elif descriptor.type in [11, 14]:
-        # Type referencing another defined Message or a named enum
-        #        print("py type: " + package + " type: " + str(descriptor), file=sys.stderr)
         return get_ref_type(package, imports, descriptor.type_name)
     elif descriptor.type == 12:
         return "bytes"
@@ -148,20 +156,38 @@ def get_py_zero(type_num: int) -> Union[str, float]:
 
 
 def traverse(proto_file):
-    def _traverse(path, items, prefix=""):
+    def _traverse(path, items, prefix="", path_ = []):
+
+        logging.debug(" _traverse path " + str(path) + " items " + str(items) + " prefix " + prefix + " path " + str(path_))
+
         for i, item in enumerate(items):
             # Adjust the name since we flatten the heirarchy.
-            item.name = next_prefix = prefix + item.name
-            yield item, path + [i]
+
+            path2 = path_
+#            path_.append(item.name)
+#            item.name = item.name
+            next_prefix = "" #prefix + item.name
+
+            yield item, path + [i], path_
 
             if isinstance(item, DescriptorProto):
+
                 for enum in item.enum_type:
                     enum.name = next_prefix + enum.name
-                    yield enum, path + [i, 4]
+                    yield enum, path + [i, 4], path_
 
                 if item.nested_type:
-                    for n, p in _traverse(path + [i, 3], item.nested_type, next_prefix):
-                        yield n, p
+
+                    if len(path2) != 0:
+                        path2.append(item.name)
+
+                    path3 = path2
+
+
+                    path3.append(item.name)
+
+                    for n, p, pp in _traverse(path + [i, 3], item.nested_type, next_prefix, path3):
+                        yield n, p, pp
 
     return itertools.chain(
         _traverse([5], proto_file.enum_type), _traverse([4], proto_file.message_type)
@@ -195,11 +221,11 @@ def get_comment(proto_file, path: List[int], indent: int = 4) -> str:
 def get_message(input_type, description):
 
     for msg in description["messages"]:
-        #        print("  - " + msg["name"], file=sys.stderr)
         if msg["name"] == input_type:
-            #            print("  + found", file=sys.stderr)
+            logging.debug(" - found input type " + input_type + " message name " + msg["name"])
             return msg
 
+    logging.debug(" - NOT found input type " + input_type)
     return None
 
 
@@ -211,6 +237,8 @@ def source_model(model, dependecies=None):
     # processing below for Service.
 
     for filename, options in model.items():
+
+        logging.info("processing file='" + filename + "'")
 
         if filename in outputs:
             continue
@@ -230,17 +258,16 @@ def source_model(model, dependecies=None):
             "services": [],
         }
 
-        type_mapping = {}
-
         for proto_file in options["files"]:
-            #            print(proto_file.message_type, file=sys.stderr)
-            #            print(proto_file.service, file=sys.stderr)
-            #            print(proto_file.source_code_info, file=sys.stderr)
+            logging.info("message" + str(proto_file.message_type))
+            logging.info("service" + str(proto_file.service))
+            logging.info("sci" + str(proto_file.source_code_info))
 
-            for item, path in traverse(proto_file):
-                #                print(item, file=sys.stderr)
-                #                print(path, file=sys.stderr)
-                data = {"name": item.name, "py_name": stringcase.pascalcase(item.name)}
+            for item, path, pp in traverse(proto_file):
+                #logging.debug("types: " + str(path) + " " + str(item.name) + " " + stringcase.pascalcase(item.name) + " " + str(pp))
+                logging.debug("types: " + str(path) + " " + str(item.name) + " " + str(pp))
+                #data = {"name": item.name, "py_name": stringcase.pascalcase(item.name)}
+                data = {"name": item.name, "py_name": item.name}
 
                 #                print(" type data " + str(data), file=sys.stderr)
 
@@ -288,7 +315,7 @@ def source_model(model, dependecies=None):
                                         == map_entry
                                     ):
                                         if nested.options.map_entry:
-                                            # print("Found a map!", file=sys.stderr)
+#                                            print("Found a map!", file=sys.stderr)
                                             k = py_type(
                                                 package,
                                                 outputs[filename]["imports"],
@@ -373,7 +400,7 @@ def source_model(model, dependecies=None):
                     outputs[filename]["enums"].append(data)
 
             for i, service in enumerate(proto_file.service):
-                # print(service, file=sys.stderr)
+#                print(service, file=sys.stderr)
 
                 data = {
                     "name": service.name,
@@ -407,6 +434,11 @@ def source_model(model, dependecies=None):
                         for field in input_message["properties"]:
                             if field["zero"] == "None":
                                 outputs[filename]["typing_imports"].add("Optional")
+
+                            if field["field_type"] == "map":
+                                outputs[filename]["typing_imports"].add("Dict")
+
+#                                print(" field" + str(field), file=sys.stderr)
 
                     data["methods"].append(
                         {
@@ -459,11 +491,14 @@ def generate_code(request, response):
 
     param_name, param_value = request.parameter.partition("=")[::2]
 
-    namespaceInPath = True
+    ignoreNamespace = ""
 
     if "disable-namespaces-in-path" in param_name:
-        if "true" in param_value:
-            namespaceInPath = False
+
+        if param_value == "*":
+            param_value = ".*"
+
+        ignoreNamespace = re.compile(param_value)
 
     # iterate over requested files to generate, not over all dependecies (dependecies are generated by external tool)
     for file_to_generate in request.file_to_generate:
@@ -489,23 +524,23 @@ def generate_code(request, response):
             path, filename = os.path.split(imported_proto_file.name)
             file_name = os.path.splitext(filename)[0]
 
-            if namespaceInPath:
-                import_path = imported_proto_file.package
-            else:
+            if ignoreNamespace and ignoreNamespace.match(imported_proto_file.package):
                 import_path = ""
+            else:
+                import_path = imported_proto_file.package
 
             if path:
-                if namespaceInPath:
+                if import_path:
                     import_path += "."
 
                 import_path += path.replace(os.path.sep, ".")
 
             imports.add("from " + import_path + "." + file_name + " import *")
 
-            if namespaceInPath:
-                import_dependecy = imported_proto_file.package + "." + file_name
-            else:
+            if ignoreNamespace and ignoreNamespace.match(imported_proto_file.package):
                 import_dependecy = file_name
+            else:
+                import_dependecy = imported_proto_file.package + "." + file_name
 
             if import_dependecy not in dependecy_map:
                 dependecy_map[import_dependecy] = {
@@ -516,10 +551,10 @@ def generate_code(request, response):
 
             dependecy_map[import_dependecy]["files"].append(imported_proto_file)
 
-        if namespaceInPath:
-            out = proto_file.package + "." + proto_file.name.rsplit(".", 1)[0]
-        else:
+        if ignoreNamespace and ignoreNamespace.match(proto_file.package):
             out = proto_file.name.rsplit(".", 1)[0]
+        else:
+            out = proto_file.package + "." + proto_file.name.rsplit(".", 1)[0]
 
         if out.startswith("google"):
             continue
