@@ -1079,9 +1079,9 @@ def _get_wrapper(proto_type: str) -> Type:
 
 @dataclasses.dataclass
 class _Date(Message):
-    year: int = betterproto.int32_field(1)
-    month: int = betterproto.int32_field(2)
-    day: int = betterproto.int32_field(3)
+    year: int = int32_field(1)
+    month: int = int32_field(2)
+    day: int = int32_field(3)
 
 _Value = Union[str, bytes]
 _MetadataLike = Union[Mapping[str, _Value], Collection[Tuple[str, _Value]]]
