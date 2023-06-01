@@ -718,6 +718,8 @@ class Message(ABC):
                     value = _Timestamp().parse(value).to_datetime()
                 elif cls == timedelta:
                     value = _Duration().parse(value).to_timedelta()
+                elif cls == Date:
+                    value = _Date().parse(value)
                 elif meta.wraps:
                     # This is a Google wrapper value message around a single
                     # scalar type.
