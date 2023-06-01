@@ -36,6 +36,8 @@ import stringcase
 
 from .casing import safe_snake_case
 
+from google.type.date_pb2 import Date
+
 if TYPE_CHECKING:
     from grpclib._protocols import IProtoMessage
     from grpclib.client import Channel
@@ -341,6 +343,8 @@ def _preprocess_single(proto_type: str, wraps: str, value: Any) -> bytes:
             seconds = int(total_ms / 1e6)
             nanos = int((total_ms % 1e6) * 1e3)
             value = _Duration(seconds=seconds, nanos=nanos)
+        elif isinstance(value, Date)
+            value = _Date(year = value.year, month = value.month, day = value.day)
         elif wraps:
             if value is None:
                 return b""
@@ -1071,6 +1075,11 @@ def _get_wrapper(proto_type: str) -> Type:
         TYPE_BYTES: _BytesValue,
     }[proto_type]
 
+@dataclasses.dataclass
+class _Date(betterproto.Message):
+    year: int = betterproto.int32_field(1)
+    month: int = betterproto.int32_field(2)
+    day: int = betterproto.int32_field(3)
 
 _Value = Union[str, bytes]
 _MetadataLike = Union[Mapping[str, _Value], Collection[Tuple[str, _Value]]]

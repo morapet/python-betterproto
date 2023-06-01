@@ -94,6 +94,9 @@ def get_ref_type(
     if type_name == "google.protobuf.Empty":
         imports.add(f"from google.protobuf.empty_pb2 import Empty")
 
+    if type_name == "google.type.Date":
+        imports.add(f"from google.type.date_pb2 import Date")
+
     if "." in type_name:
         # This is imported from another package. No need
         # to use a forward ref and we need to add the import.
