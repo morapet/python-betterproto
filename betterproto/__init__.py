@@ -343,7 +343,7 @@ def _preprocess_single(proto_type: str, wraps: str, value: Any) -> bytes:
             seconds = int(total_ms / 1e6)
             nanos = int((total_ms % 1e6) * 1e3)
             value = _Duration(seconds=seconds, nanos=nanos)
-        elif isinstance(value, Date)
+        elif isinstance(value, Date):
             value = _Date(year = value.year, month = value.month, day = value.day)
         elif wraps:
             if value is None:
@@ -1078,7 +1078,7 @@ def _get_wrapper(proto_type: str) -> Type:
     }[proto_type]
 
 @dataclasses.dataclass
-class _Date(betterproto.Message):
+class _Date(Message):
     year: int = betterproto.int32_field(1)
     month: int = betterproto.int32_field(2)
     day: int = betterproto.int32_field(3)
