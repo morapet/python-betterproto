@@ -441,7 +441,7 @@ def source_model(model, dependecies=None):
                             if field["type"] == "Date":
                                 outputs[filename]["imports"].add("from google.type.date_pb2 import Date")
 
-                            logging.info("field type=" + str(field_type))
+#                            logging.info("field type=" + str(field_type))
 #                                print(" field" + str(field), file=sys.stderr)
 
                     data["methods"].append(
