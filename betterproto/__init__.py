@@ -813,6 +813,9 @@ class Message(ABC):
                 elif isinstance(v, timedelta):
                     if v != timedelta(0) or include_default_values:
                         output[cased_name] = _Duration.delta_to_json(v)
+                elif isinstance(v, _Date):
+                    if v != _Date(0,0,0) or include_default_values:
+                        output[cased_name] = _Date.to_json(v)
                 elif meta.wraps:
                     if v is not None or include_default_values:
                         output[cased_name] = v
@@ -881,6 +884,10 @@ class Message(ABC):
                             setattr(self, field.name, v)
                         elif isinstance(v, timedelta):
                             v = timedelta(seconds=float(value[key][:-1]))
+                            setattr(self, field.name, v)
+                        elif isinstance(v, Date):
+                            dict_value = value[key]
+                            v = _Date(year=dict_value['year'], month=dict_value['month'], day=dict_value['day'])
                             setattr(self, field.name, v)
                         elif meta.wraps:
                             setattr(self, field.name, value[key])

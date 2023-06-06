@@ -23,6 +23,7 @@ setup(
         'backports-datetime-fromisoformat; python_version<"3.7"',
         "grpclib",
         "stringcase",
+        "googleapis-common-protos",
     ],
     extras_require={"compiler": ["black", "jinja2", "protobuf"]},
     zip_safe=False,
