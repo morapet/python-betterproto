@@ -37,6 +37,8 @@ import stringcase
 from .casing import safe_snake_case
 
 from google.type.date_pb2 import Date
+from google.rpc.statuc_pb2 import Status
+import google.protobuf.any_pb2.Any
 
 if TYPE_CHECKING:
     from grpclib._protocols import IProtoMessage
@@ -211,8 +213,7 @@ def uint32_field(number: int, group: Optional[str] = None) -> Any:
     return dataclass_field(number, TYPE_UINT32, group=group)
 
 
-def uint64_field(number: int, group: Optional[str] = None) -> Any:
-    return dataclass_field(number, TYPE_UINT64, group=group)
+def uint64_field(number: int, group: Optional[str] = None) -> .Anyturn dataclass_field(number, TYPE_UINT64, group=group)
 
 
 def sint32_field(number: int, group: Optional[str] = None) -> Any:
@@ -345,6 +346,10 @@ def _preprocess_single(proto_type: str, wraps: str, value: Any) -> bytes:
             value = _Duration(seconds=seconds, nanos=nanos)
         elif isinstance(value, Date):
             value = _Date(year = value.year, month = value.month, day = value.day)
+        elif isinstance(value, Status):
+            value = _Status(code = value.code, message = value.message, details = value.details)
+        elif isinstance(value, google.protobuf.any_pb2.Any):
+            value = _Any(type_url = value.type_url, value = value.value)
         elif wraps:
             if value is None:
                 return b""
@@ -720,6 +725,10 @@ class Message(ABC):
                     value = _Duration().parse(value).to_timedelta()
                 elif cls == Date:
                     value = _Date().parse(value)
+                elif cls == Status:
+                    value = _Status().parse(value)
+                elif cls == google.protobuf.any_pb2.Any:
+                    value = _Any().parse(value)
                 elif meta.wraps:
                     # This is a Google wrapper value message around a single
                     # scalar type.
@@ -814,8 +823,14 @@ class Message(ABC):
                     if v != timedelta(0) or include_default_values:
                         output[cased_name] = _Duration.delta_to_json(v)
                 elif isinstance(v, _Date):
-                    if v != _Date(0,0,0) or include_default_values:
+                    if v != _Date(year = 0, month = 0, day = 0) or include_default_values:
                         output[cased_name] = _Date.to_json(v)
+                elif isinstance(v, _Status):
+                    if v != _Status(code = 0, message = "",  list()) or include_default_values:
+                        output[cased_name] = _Status.to_json(v)
+                elif isinstance(v, _Any):
+                    if v != _Any(type_url = "", value = 0) or include_default_values:
+                        output[cased_name] = _Any.to_json(v)
                 elif meta.wraps:
                     if v is not None or include_default_values:
                         output[cased_name] = v
@@ -889,6 +904,12 @@ class Message(ABC):
                             dict_value = value[key]
                             v = _Date(year=dict_value['year'], month=dict_value['month'], day=dict_value['day'])
                             setattr(self, field.name, v)
+                        elif isinstance(v, Status):
+                            dict_value = value[key]
+                            v = _Status(code=dict_value['code'], message=dict_value['message'], details=dict_value['details'])
+                            setattr(self, field.name, v)
+
+
                         elif meta.wraps:
                             setattr(self, field.name, value[key])
                         else:
@@ -1037,6 +1058,7 @@ class _Int32Value(_WrappedMessage):
 
 @dataclasses.dataclass
 class _UInt32Value(_WrappedMessage):
+
     value: int = uint32_field(1)
 
 
@@ -1089,6 +1111,17 @@ class _Date(Message):
     year: int = int32_field(1)
     month: int = int32_field(2)
     day: int = int32_field(3)
+
+@dataclasses.dataclass
+class _Status(Message):
+  code: int = int32_field(1)
+  message: str = string_field(2)
+  details: list["_Any"] = bytes_field(3)
+
+@dataclasses.dataclass(eq=False, repr=False)
+class _Any(betterproto.Message):
+    type_url: str = string_field(1)
+    value: bytes = bytes_field(2)
 
 _Value = Union[str, bytes]
 _MetadataLike = Union[Mapping[str, _Value], Collection[Tuple[str, _Value]]]

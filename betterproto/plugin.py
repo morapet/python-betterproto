@@ -103,6 +103,9 @@ def get_ref_type(
     if type_name == "google.type.Date":
         imports.add(f"from google.type.date_pb2 import Date")
 
+    if type_name == "google.rpc.Status":
+        imports.add(f"from google.rpc.status_pb2 import Status")
+
     if "." in type_name:
         # This is imported from another package. No need
         # to use a forward ref and we need to add the import.
@@ -257,6 +260,8 @@ def source_model(model, dependecies=None):
             "enums": [],
             "services": [],
         }
+
+        logging.info("add filename into outputs '" + filename + " output " + str(outputs[filename]))
 
         for proto_file in options["files"]:
             logging.info("message" + str(proto_file.message_type))
@@ -432,6 +437,7 @@ def source_model(model, dependecies=None):
 
                     if input_message:
                         for field in input_message["properties"]:
+
                             if field["zero"] == "None":
                                 outputs[filename]["typing_imports"].add("Optional")
 
@@ -441,8 +447,8 @@ def source_model(model, dependecies=None):
                             if field["type"] == "Date":
                                 outputs[filename]["imports"].add("from google.type.date_pb2 import Date")
 
-#                            logging.info("field type=" + str(field_type))
-#                                print(" field" + str(field), file=sys.stderr)
+                            if field["type"] == "Status":
+                                outputs[filename]["imports"].add("from google.type.status_pb2 import Status")
 
                     data["methods"].append(
                         {
@@ -481,6 +487,8 @@ def source_model(model, dependecies=None):
         outputs[filename]["typing_imports"] = sorted(
             outputs[filename]["typing_imports"]
         )
+
+    logging.info("dependecies=" + str(dependecies!=None) + " output files " + str(outputs))
 
     return outputs
 
@@ -574,11 +582,15 @@ def generate_code(request, response):
             }
 
         output_map[out]["files"].append(proto_file)
+        logging.debug("outing " + out + " value " +  str(output_map[out]))
 
     deps = source_model(dependecy_map)
 
+    logging.debug("----------------------------- model sourced ------------------------ ")
+
     for filename, description in source_model(output_map, deps).items():
 
+        logging.debug("filename to generate " + str(filename))
         # Fill response
         f = response.file.add()
         #        print(filename, file=sys.stderr)
@@ -614,6 +626,7 @@ def generate_code(request, response):
         init.content = b""
 
     filenames = sorted([f.name for f in response.file])
+    logging.debug("filename " + str(filenames))
 
 
 def main():
